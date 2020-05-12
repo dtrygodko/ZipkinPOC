@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>netcoreapp3.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="KafkaSubscriber.fs" />
+    <Compile Include="Startup.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" Version="1.4.2" />
+    <PackageReference Include="OpenTelemetry" Version="0.2.0-alpha.179" />
+    <PackageReference Include="OpenTelemetry.Api" Version="0.2.0-alpha.179" />
+    <PackageReference Include="OpenTelemetry.Collector.AspNetCore" Version="0.2.0-alpha.179" />
+    <PackageReference Include="OpenTelemetry.Collector.Dependencies" Version="0.2.0-alpha.179" />
+    <PackageReference Include="OpenTelemetry.Exporter.Zipkin" Version="0.2.0-alpha.179" />
+    <PackageReference Include="OpenTelemetry.Hosting" Version="0.2.0-alpha.179" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\POC.Common\POC.Common.fsproj" />
+  </ItemGroup>
+
+</Project>
