@@ -8,9 +8,8 @@ open Microsoft.Extensions.Hosting
 open Newtonsoft.Json.Serialization
 open Microsoft.OpenApi.Models
 open POC.Common
-open OpenTelemetry.Trace.Configuration
-open OpenTelemetry.Exporter.Zipkin
-open System
+open Elastic.Apm.AspNetCore
+open Elastic.Apm.DiagnosticSource
 
 type Startup private () =
     new (configuration: IConfiguration) as this =
@@ -30,24 +29,15 @@ type Startup private () =
 
         // Add framework services.
         services.AddControllers().AddNewtonsoftJson(fun options -> options.SerializerSettings.ContractResolver <- new DefaultContractResolver()) |> ignore
-
-        let addOpenTelemetry (builder: TracerBuilder) =
-            let useZipkin (options: ZipkinTraceExporterOptions) =
-                options.ServiceName <- "TestMainService"
-                ()
-            builder.AddRequestCollector() |> ignore
-            builder.AddDependencyCollector() |> ignore
-            builder.UseZipkin(Action<ZipkinTraceExporterOptions>(useZipkin)) |> ignore
-            ()
-
-        services.AddOpenTelemetry(Action<TracerBuilder>(addOpenTelemetry)) |> ignore
-        
+                
         services.AddHttpClient() |> ignore
 
     // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
     member this.Configure(app: IApplicationBuilder, env: IWebHostEnvironment) =
         if (env.IsDevelopment()) then
             app.UseDeveloperExceptionPage() |> ignore
+
+        app.UseElasticApm(this.Configuration, new HttpDiagnosticsSubscriber()) |> ignore
 
         app.UseHttpsRedirection() |> ignore
         app.UseRouting() |> ignore

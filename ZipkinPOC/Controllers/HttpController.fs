@@ -7,24 +7,23 @@ open System.Net
 open POC.Common
 open Microsoft.Extensions.Options
 open Confluent.Kafka
-open OpenTelemetry.Trace.Configuration
+open BetLab.Infrastructure.Messaging.Kafka.Producer
+open BetLab.Infrastructure.Messaging.Kafka
+open Microsoft.Extensions.Logging.Abstractions
+open BetLab.Infrastructure.Messaging.Kafka.Observers
 
 [<ApiController>]
 [<Route("[controller]")>]
 type HttpController (clientFactory: IHttpClientFactory,
                      configuration: IConfiguration,
-                     kafkaOptions: IOptions<KafkaOptions>,
-                     tracerFactory: TracerFactory) =
+                     kafkaOptions: IOptions<POC.Common.KafkaOptions>) =
     inherit ControllerBase()
 
-    let config = new ProducerConfig(BootstrapServers = kafkaOptions.Value.Brokers)
-    let tracer = tracerFactory.GetTracer("custom")
+    let config = ["auto.offset.reset", "smallest";"queue.buffering.max.ms", "500";"compression.codec", "lz4";"message.max.bytes", "10000000";"acks", "1"] |> dict
     let testDataSerialzer = new Serializer()
-    let stringSerializer = Serializers.Utf8
 
     [<HttpGet("{id}")>]
     member this.Get(id: int) = async {
-        tracer.CurrentSpan.SetAttribute("id", id)
         let client = clientFactory.CreateClient()
         let url = configuration.GetValue<string>("HttpService")
         let request = new HttpRequestMessage(HttpMethod.Get, url + "/Test/" + sprintf "%i" id)
@@ -37,13 +36,21 @@ type HttpController (clientFactory: IHttpClientFactory,
 
     [<HttpPost()>]
     member this.Post([<FromBody>] data: TestData) = async {
-        use producer = (new ProducerBuilder<int, TestData>(config)).SetValueSerializer(testDataSerialzer).Build()
-        let traceId = new Header("TraceId", stringSerializer.Serialize(tracer.CurrentSpan.Context.TraceId.ToHexString(), new SerializationContext()))
-        let headers = (new Headers())
-        headers.Add(traceId)
-        let! _ = producer.ProduceAsync(kafkaOptions.Value.TopicName,
-                                       new Message<int, TestData>(Key = data.Id,
-                                                                  Value = data,
-                                                                  Headers = headers)) |> Async.AwaitTask
+        let producer = new KafkaProducer<int, TestData>(
+            "producer",
+            new KafkaProducerOptions(
+                "127.0.0.1:9092",
+                "murmur2old",
+                Seq.empty,
+                VerbosityLevel.Normal,
+                config),
+            Serializers.Int32,
+            testDataSerialzer,
+            new NullObserver(),
+            NullLogger.Instance)
+        let! _ = producer.ProduceAsync(
+            data.Id,
+            data,
+            kafkaOptions.Value.TopicName) |> Async.AwaitTask
         return this.Ok()
     }

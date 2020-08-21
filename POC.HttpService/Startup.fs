@@ -11,8 +11,9 @@ open Microsoft.Extensions.Options
 open System
 open Microsoft.OpenApi.Models
 open Newtonsoft.Json.Serialization
-open OpenTelemetry.Trace.Configuration
-open OpenTelemetry.Exporter.Zipkin
+open Elastic.Apm.AspNetCore
+open Elastic.Apm.DiagnosticSource
+open Elastic.Apm.Mongo
 
 type Startup private () =
     new (configuration: IConfiguration) as this =
@@ -25,7 +26,9 @@ type Startup private () =
 
         services.AddSingleton<IMongoDatabase>(fun provider ->
             let options = provider.GetService<IOptions<MongoOptions>>()
-            let client = new MongoClient(options.Value.ConnectionString)
+            let settings = MongoClientSettings.FromConnectionString(options.Value.ConnectionString)
+            settings.ClusterConfigurator <- fun builder -> (builder.Subscribe(new MongoEventSubscriber()) |> ignore)
+            let client = new MongoClient(settings)
             client.GetDatabase(options.Value.DBName)) |> ignore
 
         services.AddSingleton<MongoRepository>(fun provider ->
@@ -42,21 +45,14 @@ type Startup private () =
         // Add framework services.
         services.AddControllers().AddNewtonsoftJson(fun options -> options.SerializerSettings.ContractResolver <- new DefaultContractResolver()) |> ignore
 
-        let addOpenTelemetry (builder: TracerBuilder) =
-            let useZipkin (options: ZipkinTraceExporterOptions) =
-                options.ServiceName <- "TestHttpService"
-                ()
-            builder.AddRequestCollector() |> ignore
-            builder.AddDependencyCollector() |> ignore
-            builder.UseZipkin(Action<ZipkinTraceExporterOptions>(useZipkin)) |> ignore
-            ()
-
-        services.AddOpenTelemetry(Action<TracerBuilder>(addOpenTelemetry)) |> ignore
+        
 
     // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
     member this.Configure(app: IApplicationBuilder, env: IWebHostEnvironment, serviceProvider: IServiceProvider) =
         if (env.IsDevelopment()) then
             app.UseDeveloperExceptionPage() |> ignore
+
+        app.UseElasticApm(this.Configuration, new HttpDiagnosticsSubscriber(), new MongoDiagnosticsSubscriber()) |> ignore
 
         let mongoRepo = serviceProvider.GetService<MongoRepository>()
         mongoRepo.start() |> ignore
