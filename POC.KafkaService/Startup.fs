@@ -19,6 +19,7 @@ open BetLab.Infrastructure.Messaging.Kafka
 open Microsoft.Extensions.Logging.Abstractions
 open BetLab.Infrastructure.Messaging.Kafka.Observers
 open System.Threading.Tasks
+open BetLab.Infrastructure.Messaging.Kafka.Producer
 
 type Startup private () =
     new (configuration: IConfiguration) as this =
@@ -52,7 +53,26 @@ type Startup private () =
         app.UseElasticApm(this.Configuration, new HttpDiagnosticsSubscriber()) |> ignore
 
         let config = ["auto.offset.reset", "smallest";"queue.buffering.max.ms", "500";"compression.codec", "lz4";"message.max.bytes", "10000000";"acks", "1";"group.id", "dev"] |> dict
-        let testDataSerialzer = new Deserializer()
+        let testDataDeserialzer = new Deserializer()
+        let testDataSerialzer = new Serializer()
+
+        let produce (data: TestData) = 
+            let producer = new KafkaProducer<int, TestData>(
+                "producer",
+                new KafkaProducerOptions(
+                    "127.0.0.1:9092",
+                    "murmur2old",
+                    Seq.empty,
+                    VerbosityLevel.Normal,
+                    config),
+                Serializers.Int32,
+                testDataSerialzer,
+                new NullObserver(),
+                NullLogger.Instance)
+            producer.ProduceAsync(
+                data.Id,
+                data,
+                "testDataTopic")
 
         let subscriber = new KafkaListener<int, TestData>(
             "listener",
@@ -62,9 +82,9 @@ type Startup private () =
                 "dev",
                 VerbosityLevel.Normal,
                 config),
-            (fun _ _ -> async.Zero() |> Async.StartAsTask :> Task),
+            (fun k _ -> produce k.Message.Value),
             Deserializers.Int32,
-            testDataSerialzer,
+            testDataDeserialzer,
             new NullObserver(),
             NullLogger.Instance)
 

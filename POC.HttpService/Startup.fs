@@ -14,6 +14,13 @@ open Newtonsoft.Json.Serialization
 open Elastic.Apm.AspNetCore
 open Elastic.Apm.DiagnosticSource
 open Elastic.Apm.Mongo
+open POC.Common
+open BetLab.Infrastructure.Messaging.Kafka.Listener
+open BetLab.Infrastructure.Messaging.Kafka
+open Confluent.Kafka
+open BetLab.Infrastructure.Messaging.Kafka.Observers
+open Microsoft.Extensions.Logging.Abstractions
+open System.Threading.Tasks
 
 type Startup private () =
     new (configuration: IConfiguration) as this =
@@ -56,6 +63,26 @@ type Startup private () =
 
         let mongoRepo = serviceProvider.GetService<MongoRepository>()
         mongoRepo.start() |> ignore
+
+        let config = ["auto.offset.reset", "smallest";"queue.buffering.max.ms", "500";"compression.codec", "lz4";"message.max.bytes", "10000000";"acks", "1";"group.id", "dev"] |> dict
+
+        let testDataDeserialzer = new Deserializer()
+
+        let subscriber = new KafkaListener<int, TestData>(
+            "listener",
+            new KafkaListenerOptions(
+                "localhost:9092",
+                "testDataTopic",
+                "dev",
+                VerbosityLevel.Normal,
+                config),
+            (fun _ _ -> Task.Delay(5000)),
+            Deserializers.Int32,
+            testDataDeserialzer,
+            new NullObserver(),
+            NullLogger.Instance)
+
+        subscriber.Start()
 
         app.UseHttpsRedirection() |> ignore
         app.UseRouting() |> ignore
