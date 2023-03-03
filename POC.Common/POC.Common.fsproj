@@ -16,7 +16,7 @@
     <PackageReference Include="BetLab.Infrastructure.Messaging.Kafka" Version="1.0.277-TR-1205-APM" />
     <PackageReference Include="Elastic.Apm.NetCoreAll" Version="1.6.1" />
     <PackageReference Include="ElasticApm.MongoDB" Version="1.1.0" />
-    <PackageReference Include="MongoDB.Driver" Version="2.10.3" />
+    <PackageReference Include="MongoDB.Driver" Version="2.19.0" />
   </ItemGroup>
 
 </Project>
